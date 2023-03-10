@@ -1,0 +1,29 @@
+Backend:
+    file main.go
+    func main() {
+    /*dot env buat menyimpan variable dengan value nya pada satu file
+     agar bisa di akses di file manapun*/
+	errEnv := godotenv.Load()
+	if errEnv != nil {
+		panic("Failed to load env file")
+	}
+
+	e := echo.New()
+
+	// code here
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{echo.GET, echo.POST, echo.PATCH, echo.DELETE},
+		AllowHeaders: []string{"X-Requested-With", "Content-Type", "Authorization"},
+	}))
+
+	mysql.DatabaseInit()
+	database.RunMigration()
+
+	routes.RouteInit(e.Group("/api/v1"))
+
+	e.Static("/uploads", "./uploads")
+
+	fmt.Println("server running localhost:5000")
+	e.Logger.Fatal(e.Start("localhost:5000"))
+}

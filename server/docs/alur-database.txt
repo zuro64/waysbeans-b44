@@ -1,0 +1,387 @@
+
+langkah
+1. Koneksi Database
+mysql.DatabaseInit() -> 
+    pemanggilan koneksi database
+        1. bikin folder mysql 
+        2. bikin file mysql.go
+        3.bikin var DB *gorm.DB
+        4.bikin function 
+        package mysql
+
+        import (
+            "fmt"
+
+            "gorm.io/driver/mysql"
+            "gorm.io/gorm"
+        )
+
+        var DB *gorm.DB
+
+        func DatabaseInit() {
+            var err error
+            dsn := "root:@tcp(localhost:3306)/dumbmerch_b44?charset=utf8mb4&parseTime=True&loc=Local"
+            DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
+
+            if err != nil {
+                panic(err)
+            }
+            fmt.Println("Connected to Database")
+        }
+
+2. Model -> 
+    pembuatan model 
+        disini kita membuat struct dan deklarasi data 
+        sesuai dengan data table 
+        yang akan kita gunakan
+
+        package models
+
+        import "time"
+
+        type User struct {
+            ID        int       `json:"id"`
+            Name      string    `json:"name" gorm:"type: varchar(255)"`
+            Email     string    `json:"email" gorm:"type: varchar(255)"`
+            Password  string    `json:"password" gorm:"type: varchar(255)"`
+            CreatedAt time.Time `json:"created_at"`
+            UpdatedAt time.Time `json:"updated_at"`
+        }
+
+3. AutoMigrate -> 
+    pemanggilan untuk otomatis migrasi data yang ada di folder database ke mysql
+    1. bikin folder database
+    2. bikin file migration.go
+    3. bikin function RunMigration()
+        func RunMigration() {
+        err := mysql.DB.AutoMigrate(&models.User{})
+
+        if err != nil {
+            fmt.Println(err)
+            panic("Migration Failed")
+        }
+
+            fmt.Println("Migration Success")
+        }
+    4. bikin mysql.DB.AutoMigrate(&models.User{}) dengan menangkap variable error
+    &models.User{} artinya kita pointer masuk ke models user
+    5. bikin pengkondisian jika error tidak null maka print error
+    6. jika sudah maka lakukan println migration success
+
+3.Dto -> 
+    pembuatan dto
+    dto berfungsi untuk menampilkan hasil fungsi pada front end 
+    hasil dari function yang sudah ada di handle
+    pada dto ada dua yang kita buat yaitu 
+    bikin dua folder 
+    1.user
+    2.result
+
+    --folder user
+    1 user_request.go
+        fungsi nya ini untuk mendefinisikan struct
+        untuk menangkap tiap data ke struct ini
+        lalu digunakan memanipulasi atau menambah data yang di tangkap
+        yang selanjutnya digunakan ke function insert dan updated
+        ibaratnya seperti menangkap kumpulan data inputan user
+        dan di masukan ke struct model 
+        struct model itu yang akan di gunakan ke parameter function nya
+        package usersdto
+
+        type CreateUserRequest struct {
+            Name     string `json:"name" form:"name" validate:"required"`
+            Email    string `json:"email" form:"email" validate:"required"`
+            Password string `json:"password" form:"password" validate:"required"`
+        }
+
+        type UpdateUserRequest struct {
+            Name     string `json:"name" form:"name"`
+            Email    string `json:"email" form:"email"`
+            Password string `json:"password" form:"password"`
+        }
+
+    2 user_response.go
+        fungsi nya untuk menangkap data yang sudah di hapus,
+        lalu menampilkan data yang sudah di definisikan dengan 
+        struct dan yang sudah di buat juga pada user_response.go ini
+        lalu hasil tadi di tampilkan ke frontend 
+        
+        package usersdto
+
+        type UserResponse struct {
+            ID       int    `json:"id"`
+            Name     string `json:"name" form:"name" validate:"required"`
+            Email    string `json:"email" form:"email" validate:"required"`
+            Password string `json:"password" form:"password" validate:"required"`
+        }
+
+    folder result
+    3 result.go
+       Success Result
+            type SuccessResult struct {
+                Code int         `json:"code"`
+                Data interface{} `json:"data"`
+            }
+        succes result ini untuk menampung interface data yang sudah berhasil
+        di tarik oleh function GET lalu di munculkan ke frontend
+        Error Result
+            type ErrorResult struct {
+                Code    int    `json:"code"`
+                Message string `json:"message"`
+            }
+        error result ini digunakan untuk menampilkan code dan pesan error
+        jika terjadi suatu kesalahan pada function handler nya
+
+4. repository -> 
+        -- pembuatan repository
+        4.1 bikin folder repositories 
+        
+        4.2 bikin file users.go (nama file sesuai data apa yang akan kita olah)
+        
+        4.3 bikin tampungan interface untuk kumpulan dari function 
+        type UserRepository interface {
+            FindUsers() ([]models.User, error)
+            GetUser(ID int) (models.User, error)
+            CreateUser(user models.User) (models.User, error)
+            UpdateUser(user models.User, ID int) (models.User, error)
+            DeleteUser(user models.User, ID int) (models.User, error)
+        }
+
+        4.4 bikin struct dengan isi db *gorm.DB
+        fungsi nya untuk menampung koneksi database
+        type repository struct {
+            db *gorm.DB
+        }
+        
+        lalu buat function 
+        func RepositoryUser(db *gorm.DB) *repository {
+            return &repository{db}
+        }
+        function ini bertugas untuk menyiapkan function yang sudah di list
+        pada struct UserRepository untuk di kirim ke handler 
+
+        4.5 mulai pembuatan tiap function untuk melakukan query 
+            4.5.1 pembuatan function query FindUsers yang digunakan untuk select * from users
+            function ini akan mereturn data users yang sudah di definisikan oleh []models.user
+            
+            func (r *repository) FindUsers() ([]models.User, error) {
+                var users []models.User
+                err := r.db.Raw("SELECT * FROM users").Scan(&users).Error
+
+                return users, err
+            }
+                4.5.1.1
+                []models.User ini adalah definisi model dari file models->user.go 
+                yang sudah di isi struct User
+                diberi square bracket [] karna data yang di tampung lebih dari 1
+        
+            4.5.2 pembuatan function query GetUser 
+            func (r *repository) GetUser(ID int) (models.User, error) {
+            	var user models.User
+                err := r.db.Raw("SELECT * FROM users WHERE id=?", ID).Scan(&user).Error
+
+                return user, err
+            }
+                4.5.2.1
+                r *repository ini di ambil dari struct repository yang berisi koneksi database
+                4.5.2.2
+                ID int digunakan untuk mengambil ID yang di lempar dari url params routing
+                4.5.2.3
+                models.User itu untuk menangkap struct models dari folder models
+                yang sudah dibuat dan di import fungsi nya untuk menampung data 
+                yang sudah di query
+                4.5.2.4
+                return user itu agar fungsi tersebut mereturn struct user 
+                yang sudah menampung query
+                
+            4.5.3 pembuatan function query UpdateUser 
+            func (r *repository) UpdateUser(user models.User, ID int) (models.User, error) {
+                err := r.db.Raw("UPDATE users SET name=?, email=?, password=? WHERE id=?", user.Name, user.Email, user.Password, ID).Scan(&user).Error
+                return user, err
+            }
+
+            4.5.4 pembuatan function query DeleteUser
+            func (r *repository) DeleteUser(user models.User, ID int) (models.User, error) {
+            err := r.db.Raw("DELETE FROM users WHERE id=?", ID).Scan(&user).Error
+            return user, err}
+
+
+
+handler -> 
+    package handlers
+
+    import (
+        dto "dumbmerch/dto/result"
+        usersdto "dumbmerch/dto/users"
+        "dumbmerch/models"
+        "dumbmerch/repositories"
+        "net/http"
+        "strconv"
+
+        "github.com/go-playground/validator/v10"
+        "github.com/labstack/echo/v4"
+    )
+
+    type handler struct {
+        UserRepository repositories.UserRepository
+    }
+
+    func HandlerUser(UserRepository repositories.UserRepository) *handler {
+        return &handler{UserRepository}
+    }
+
+    func (h *handler) FindUsers(c echo.Context) error {
+        users, err := h.UserRepository.FindUsers()
+        if err != nil {
+            return c.JSON(http.StatusBadRequest, dto.ErrorResult{Code: http.StatusBadRequest, Message: err.Error()})
+        }
+
+        return c.JSON(http.StatusOK, dto.SuccessResult{Code: http.StatusOK, Data: users})
+    }
+
+    func (h *handler) GetUser(c echo.Context) error {
+        id, _ := strconv.Atoi(c.Param("id"))
+
+        user, err := h.UserRepository.GetUser(id)
+        if err != nil {
+            return c.JSON(http.StatusBadRequest, dto.ErrorResult{Code: http.StatusBadRequest, Message: err.Error()})
+        }
+
+        return c.JSON(http.StatusOK, dto.SuccessResult{Code: http.StatusOK, Data: convertResponse(user)})
+    }
+
+    func (h *handler) CreateUser(c echo.Context) error {
+        request := new(usersdto.CreateUserRequest)
+        if err := c.Bind(request); err != nil {
+            return c.JSON(http.StatusBadRequest, dto.ErrorResult{Code: http.StatusBadRequest, Message: err.Error()})
+        }
+
+        validation := validator.New()
+        err := validation.Struct(request)
+        if err != nil {
+            return c.JSON(http.StatusBadRequest, dto.ErrorResult{Code: http.StatusBadRequest, Message: err.Error()})
+        }
+
+        user := models.User{
+            Name:     request.Name,
+            Email:    request.Email,
+            Password: request.Password,
+        }
+
+        data, err := h.UserRepository.CreateUser(user)
+        if err != nil {
+            return c.JSON(http.StatusInternalServerError, dto.ErrorResult{Code: http.StatusInternalServerError, Message: err.Error()})
+        }
+
+        return c.JSON(http.StatusOK, dto.SuccessResult{Code: http.StatusOK, Data: convertResponse(data)})
+    }
+
+    func (h *handler) UpdateUser(c echo.Context) error {
+        request := new(usersdto.UpdateUserRequest)
+        if err := c.Bind(&request); err != nil {
+            return c.JSON(http.StatusBadRequest, dto.ErrorResult{Code: http.StatusBadRequest, Message: err.Error()})
+        }
+
+        id, _ := strconv.Atoi(c.Param("id"))
+
+        user, err := h.UserRepository.GetUser(id)
+
+        if err != nil {
+            return c.JSON(http.StatusBadRequest, dto.ErrorResult{Code: http.StatusBadRequest, Message: err.Error()})
+        }
+
+        if request.Name != "" {
+            user.Name = request.Name
+        }
+
+        if request.Email != "" {
+            user.Email = request.Email
+        }
+
+        if request.Password != "" {
+            user.Password = request.Password
+        }
+
+        data, err := h.UserRepository.UpdateUser(user, id)
+        if err != nil {
+            return c.JSON(http.StatusInternalServerError, dto.ErrorResult{Code: http.StatusInternalServerError, Message: err.Error()})
+        }
+
+        return c.JSON(http.StatusOK, dto.SuccessResult{Code: http.StatusOK, Data: convertResponse(data)})
+    }
+
+    func (h *handler) DeleteUser(c echo.Context) error {
+        id, _ := strconv.Atoi(c.Param("id"))
+
+        user, err := h.UserRepository.GetUser(id)
+        if err != nil {
+            return c.JSON(http.StatusBadRequest, dto.ErrorResult{Code: http.StatusBadRequest, Message: err.Error()})
+        }
+
+        data, err := h.UserRepository.DeleteUser(user, id)
+        if err != nil {
+            return c.JSON(http.StatusInternalServerError, dto.ErrorResult{Code: http.StatusInternalServerError, Message: err.Error()})
+        }
+
+        return c.JSON(http.StatusOK, dto.SuccessResult{Code: http.StatusOK, Data: convertResponse(data)})
+    }
+
+    func convertResponse(u models.User) usersdto.UserResponse {
+        return usersdto.UserResponse{
+            ID:       u.ID,
+            Name:     u.Name,
+            Email:    u.Email,
+            Password: u.Password,
+        }
+    }
+
+routes ->
+untuk menjalankan function pada web kita memerlukan routing
+    1. bikin folder routes
+        bikin file 
+        routes.go
+        todo.go
+        user.go
+
+        1.1 Didalam file routes.go ada function RouteInit(e)
+        fungsi nya untuk menampung 
+        package routes yang sudah dibuat di file routes.go 
+
+        import "github.com/labstack/echo/v4"
+
+        func RouteInit(e *echo.Group) {
+            TodoRoutes(e)
+            UserRoutes(e)
+        }
+
+    2. bikin file user.go dalam folder routes
+     function UserRoutes(e *echo.Group) {}
+        func UserRoutes(e *echo.Group) {
+            userRepository := repositories.RepositoryUser(mysql.DB)
+            h := handlers.HandlerUser(userRepository)
+
+            e.GET("/users", h.FindUsers)
+            e.GET("/user/:id", h.GetUser)
+            e.POST("/user", h.CreateUser)
+            e.PATCH("/user/:id", h.UpdateUser)
+            e.DELETE("/user/:id", h.DeleteUser)
+        }
+        UserRoutes ini menampung semua handler 
+        yang ada di interface userRepository
+        di tentukan routing dan method nya
+
+    3. lalu panggil userRepository dari Repositories yang sudah kita buat dengan cara
+    userRepository := repositories.RepositoryUser(mysql.DB)
+
+    4. deklarasi handler dengan parameter userRepository yang sudah di import
+
+    5. pembuatan function method (GET, POST, PATCH, DELETE) untuk menggunakan
+        tiap function yang di panggil dengan handler yang sudah di import
+        dari handler 
+        handler ini berfungsi untuk menjalankan kumpulan fungsi yang ada
+        di repositories
+            e.GET("/users", h.FindUsers)
+            e.GET("/user/:id", h.GetUser)
+            e.POST("/user", h.CreateUser)
+            e.PATCH("/user/:id", h.UpdateUser)
+            e.DELETE("/user/:id", h.DeleteUser)

@@ -1,0 +1,4 @@
+one to one
+1. bikin model 
+2. bikin dto
+3. bikin relasi ke table yang di tuju
